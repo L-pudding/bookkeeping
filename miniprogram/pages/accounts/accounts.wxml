@@ -1,0 +1,66 @@
+<!-- pages/accounts/accounts.wxml -->
+<view class="container">
+  <view class="card" wx:for="{{accounts}}" wx:key="_id">
+    <view class="account-row">
+      <view class="account-icon">{{item.icon}}</view>
+      <view class="account-info">
+        <view class="account-name">{{item.name}}</view>
+        <view class="account-type">{{typeLabels[item.type]}}</view>
+      </view>
+      <view class="account-balance">¥{{item.balanceStr}}</view>
+    </view>
+    <view class="account-actions">
+      <view class="action-btn" bindtap="editAccount" data-id="{{item._id}}">编辑</view>
+      <view class="action-btn danger" bindtap="deleteAccount" data-id="{{item._id}}">删除</view>
+    </view>
+  </view>
+
+  <view class="add-btn" bindtap="addAccount">+ 添加账户</view>
+</view>
+
+<!-- 编辑弹窗 -->
+<view class="mask" wx:if="{{editVisible}}" bindtap="hideEdit">
+  <view class="edit-panel" catchtap="">
+    <view class="edit-title">{{editingId ? '编辑账户' : '添加账户'}}</view>
+
+    <view class="input-row">
+      <text class="input-label">名称</text>
+      <input class="input-value" placeholder="如：招行储蓄卡" value="{{form.name}}" bindinput="onFormInput" data-field="name" />
+    </view>
+
+    <view class="input-row">
+      <text class="input-label">类型</text>
+      <picker mode="selector" range="{{typeOptions}}" range-key="label" value="{{form.typeIdx}}" bindchange="onTypeChange">
+        <view class="input-value">{{typeOptions[form.typeIdx].label}}</view>
+      </picker>
+    </view>
+
+    <view class="input-row">
+      <text class="input-label">图标</text>
+      <view class="icon-picker">
+        <view
+          wx:for="{{iconOptions}}"
+          wx:key="*this"
+          class="icon-option {{form.icon === item ? 'selected' : ''}}"
+          bindtap="selectIcon"
+          data-icon="{{item}}"
+        >{{item}}</view>
+      </view>
+    </view>
+
+    <view class="input-row">
+      <text class="input-label">初始余额</text>
+      <input type="digit" class="input-value" placeholder="0.00" value="{{form.initialBalance}}" bindinput="onFormInput" data-field="initialBalance" />
+    </view>
+
+    <view class="input-row">
+      <text class="input-label">当前实际余额</text>
+      <input type="digit" class="input-value" placeholder="0.00" value="{{form.currentBalance}}" bindinput="onFormInput" data-field="currentBalance" />
+    </view>
+
+    <view class="edit-hint">"当前实际余额"用于对账——跟系统算出的应有余额对比，差额不为0说明有漏记或错记</view>
+
+    <button class="btn-primary" bindtap="saveAccount">保存</button>
+    <view class="edit-cancel" bindtap="hideEdit">取消</view>
+  </view>
+</view>

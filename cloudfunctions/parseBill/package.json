@@ -1,0 +1,10 @@
+{
+  "name": "parseBill",
+  "version": "1.0.0",
+  "description": "账单解析（支持 CSV 和 Excel，含微信/支付宝/银行/通用格式）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3",
+    "xlsx": "^0.18.5"
+  }
+}

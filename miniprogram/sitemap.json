@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "*": {
+      "action": "allow",
+      "filter": {
+        "_openid": "{openid}"
+      }
+    }
+  }
+}

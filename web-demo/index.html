@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>记账本</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--blue:#3b82f6;--blue-light:#eff6ff;--blue-dark:#2563eb;--red:#ef4444;--green:#22c55e;--orange:#f59e0b;--bg:#f8fafc;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--shadow:0 1px 3px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06);--shadow-lg:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.05)}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#e2e8f0;display:flex;justify-content:center;min-height:100vh;color:var(--text)}
+.app{width:100%;max-width:480px;min-height:100vh;background:var(--bg);display:flex;flex-direction:column;position:relative;box-shadow:0 0 40px rgba(0,0,0,.12)}
+.hdr{background:var(--blue);color:#fff;padding:16px 20px;font-size:18px;font-weight:600;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.hdr-btn{font-size:13px;background:rgba(255,255,255,.2);padding:6px 14px;border-radius:20px;cursor:pointer;border:none;color:#fff}
+.hdr-btn:active{background:rgba(255,255,255,.3)}
+.content{flex:1;overflow-y:auto;padding:16px 16px 80px;-webkit-overflow-scrolling:touch}
+.card{background:var(--card);border-radius:16px;padding:20px;margin-bottom:12px;box-shadow:var(--shadow)}
+.btn{background:var(--blue);color:#fff;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:500;width:100%;cursor:pointer;box-shadow:0 2px 8px rgba(59,130,246,.3)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{background:#93c5fd;cursor:not-allowed;box-shadow:none}
+.btn-sm{font-size:13px;padding:8px 16px;border-radius:8px;width:auto}
+.btn-out{background:transparent;color:var(--blue);border:1px solid var(--border)}
+.btn-danger{background:var(--red)}
+.input{width:100%;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:15px;outline:none;background:var(--bg);transition:border .2s}
+.input:focus{border-color:var(--blue)}
+.row{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:none}
+.row-label{width:80px;font-size:14px;color:var(--muted);flex-shrink:0}
+.row-val{flex:1;font-size:15px}
+.row-input{border:none;outline:none;font-size:15px;width:100%;background:transparent}
+.tabs{display:flex;background:#fff;border-top:1px solid var(--border);position:sticky;bottom:0;z-index:10;box-shadow:0 -2px 10px rgba(0,0,0,.05)}
+.tab{flex:1;text-align:center;padding:10px 0;font-size:12px;color:var(--muted);cursor:pointer}
+.tab.active{color:var(--blue);font-weight:600}
+.tab-ic{font-size:20px;margin-bottom:2px;display:block}
+.empty{text-align:center;padding:60px 20px;color:var(--muted);font-size:14px}
+.summary{display:flex;background:var(--card);border-radius:16px;padding:16px 0;margin-bottom:12px;box-shadow:var(--shadow)}
+.sum-item{flex:1;text-align:center}
+.sum-lbl{font-size:11px;color:var(--muted);margin-bottom:4px}
+.sum-val{font-size:16px;font-weight:600}
+.sum-exp{color:var(--red)}.sum-inc{color:var(--green)}.sum-bal{color:var(--text)}
+.type-sel{display:flex;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:16px}
+.type-btn{flex:1;text-align:center;padding:8px;border-radius:8px;font-size:14px;color:var(--muted);cursor:pointer}
+.type-btn.active{background:#fff;color:var(--blue);font-weight:500;box-shadow:var(--shadow)}
+.amt-in{display:flex;align-items:baseline;gap:6px;padding:12px 0;border-bottom:2px solid var(--blue)}
+.amt-cur{font-size:28px;color:var(--text);font-weight:600}
+.amt-fld{flex:1;font-size:36px;font-weight:700;border:none;outline:none;color:var(--text)}
+.acc-bal{font-size:24px;font-weight:700}
+.acc-bal.neg{color:var(--red)}
+.tx-item{display:flex;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)}
+.tx-item:last-child{border:none}
+.tx-ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-right:12px;flex-shrink:0}
+.tx-ic.exp{background:#fee2e2}.tx-ic.inc{background:#dcfce7}.tx-ic.trf{background:#e0e7ff}
+.tx-info{flex:1;min-width:0}
+.tx-mer{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.tx-amt{font-size:15px;font-weight:600;flex-shrink:0}
+.tx-amt.exp{color:var(--red)}.tx-amt.inc{color:var(--green)}.tx-amt.trf{color:var(--muted)}
+.modal-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.modal{background:#fff;width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:80vh;overflow-y:auto}
+.modal-t{font-size:17px;font-weight:600;text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500}
+.pill-exp{background:#fee2e2;color:#dc2626}.pill-inc{background:#dcfce7;color:#16a34a}.pill-trf{background:#e0e7ff;color:#4338ca}
+.fmt-opt{border:2px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer}
+.fmt-opt.active{border-color:var(--blue);background:var(--blue-light)}
+.fmt-n{font-size:14px;font-weight:500}.fmt-d{font-size:12px;color:var(--muted);margin-top:2px}
+.upload{border:2px dashed var(--border);border-radius:12px;padding:30px;text-align:center;color:var(--muted);font-size:14px;cursor:pointer}
+.upload:active{border-color:var(--blue);background:var(--blue-light)}
+.pr-row{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #f1f5f9}
+.pr-type{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;margin-right:10px;flex-shrink:0}
+.pr-type.exp{background:#fee2e2;color:#dc2626}.pr-type.inc{background:#dcfce7;color:#16a34a}
+.pr-info{flex:1;min-width:0}.pr-mer{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pr-date{font-size:11px;color:var(--muted)}
+.pr-amt{font-size:14px;font-weight:600;flex-shrink:0}.pr-amt.exp{color:var(--red)}.pr-amt.inc{color:var(--green)}
+.rec{display:flex;background:#fff;border-radius:16px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow)}
+.rec-l{width:6px;flex-shrink:0}.rec-l.ok{background:var(--green)}.rec-l.warn{background:var(--red)}
+.rec-c{flex:1;padding:16px}
+.rec-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.rec-n{font-size:15px;font-weight:600}
+.rec-badge{font-size:11px;padding:2px 8px;border-radius:6px}
+.rec-badge.ok{background:#dcfce7;color:#16a34a}.rec-badge.warn{background:#fee2e2;color:#dc2626}
+.rec-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
+.rec-lbl{color:var(--muted)}.rec-val{font-weight:500}
+.rec-val.warn{color:var(--red);font-weight:700}
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 24px;border-radius:20px;font-size:14px;z-index:100;white-space:pre-line;text-align:center}
+.hidden{display:none!important}
+.cat-grid{display:flex;flex-wrap:wrap;gap:8px}
+.cat{width:23%;text-align:center;padding:10px 0;border-radius:10px;cursor:pointer;border:2px solid transparent}
+.cat.active{border-color:var(--blue);background:var(--blue-light)}
+.cat-ic{font-size:24px}.cat-n{font-size:11px;color:var(--muted);margin-top:2px}
+.cat.active .cat-n{color:var(--blue)}
+@media(max-width:480px){.app{box-shadow:none}.modal{border-radius:0}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hdr">
+    <span>记账本</span>
+    <button class="hdr-btn" onclick="confirmClear()">清空</button>
+  </div>
+  <div class="content" id="content"></div>
+  <div class="tabs">
+    <div class="tab active" data-t="list" onclick="switchTab('list')"><span class="tab-ic">📋</span>流水</div>
+    <div class="tab" data-t="stats" onclick="switchTab('stats')"><span class="tab-ic">📊</span>统计</div>
+    <div class="tab" data-t="acc" onclick="switchTab('acc')"><span class="tab-ic">💳</span>账户</div>
+    <div class="tab" data-t="rec" onclick="switchTab('rec')"><span class="tab-ic">🔍</span>对账</div>
+    <div class="tab" data-t="imp" onclick="switchTab('imp')"><span class="tab-ic">📥</span>导入</div>
+  </div>
+</div>
+<div id="modal" class="modal-bg hidden" onclick="if(event.target===this)hideModal()">
+  <div class="modal" id="modalC"></div>
+</div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+// ===== 数据层 =====
+const STORE_KEY='bookkeeping_v2'
+let db={accounts:[],transactions:[],categories:[]}
+let currentTab='list'
+
+function load(){const s=localStorage.getItem(STORE_KEY);if(s)db=JSON.parse(s)}
+function save(){localStorage.setItem(STORE_KEY,JSON.stringify(db))}
+function initDB(){
+  db={
+    accounts:[
+      {_id:'a1',name:'建行储蓄卡',type:'savings',icon:'🏦',initialBalance:10000,currentBalance:10000,sortOrder:1},
+      {_id:'a2',name:'招行信用卡',type:'credit',icon:'💳',initialBalance:0,currentBalance:0,sortOrder:2},
+      {_id:'a3',name:'现金',type:'cash',icon:'💵',initialBalance:500,currentBalance:500,sortOrder:3},
+    ],
+    transactions:[],
+    categories:[
+      {_id:'c1',name:'餐饮',icon:'🍔',type:'expense'},
+      {_id:'c2',name:'交通',icon:'🚇',type:'expense'},
+      {_id:'c3',name:'购物',icon:'🛒',type:'expense'},
+      {_id:'c4',name:'生活',icon:'🏠',type:'expense'},
+      {_id:'c5',name:'娱乐',icon:'🎮',type:'expense'},
+      {_id:'c6',name:'医疗',icon:'💊',type:'expense'},
+      {_id:'c7',name:'其他',icon:'📝',type:'expense'},
+      {_id:'c8',name:'工资',icon:'💰',type:'income'},
+      {_id:'c9',name:'退款',icon:'↩️',type:'income'},
+      {_id:'c10',name:'其他',icon:'📝',type:'income'},
+    ]
+  }
+  save()
+}
+
+// ===== 指纹去重 =====
+// 指纹 = hash(金额 + 类型 + 分钟级时间 + 归一化商户名)
+// 加"类型"是为了区分同一笔消费和退款（同一天同一商户同一金额但方向相反）
+function fp(amt,type,ts,mer){
+  const a=Number(amt).toFixed(2)
+  const t=Math.floor((typeof ts==='object'?ts.getTime():Number(ts))/60000)*60000
+  const m=(mer||'').replace(/\s+/g,'').toLowerCase().replace(/[^\w\u4e00-\u9fa5]/g,'')
+  let h=5381;const r=a+'|'+(type||'')+'|'+t+'|'+m
+  for(let i=0;i<r.length;i++){h=((h<<5)+h)+r.charCodeAt(i);h=h&h}
+  return'fp_'+Math.abs(h).toString(36)
+}
+
+// ===== 交易操作 =====
+function addTx({amount,type,accountId,toAccountId,categoryId,merchant,note,timestamp,source}){
+  if(!amount||!accountId)return{success:false,error:'缺少参数'}
+  amount=Number(amount)
+  const ts=timestamp||Date.now()
+  const id='tx_'+Date.now()+'_'+Math.random().toString(36).slice(2,6)
+  if(type==='transfer'){
+    const f=fp(amount,'transfer',ts,merchant+'__transfer__'+accountId+'_'+toAccountId)
+    if(db.transactions.some(t=>t.fingerprint===f))return{success:true,duplicate:true}
+    db.transactions.push({_id:id,accountId,toAccountId,amount,type:'transfer',note:note||'转账',timestamp:ts,source:source||'manual',fingerprint:f})
+    save()
+    return{success:true,duplicate:false}
+  }
+  const f=fp(amount,type,ts,merchant)
+  if(db.transactions.some(t=>t.fingerprint===f))return{success:true,duplicate:true}
+  db.transactions.push({_id:id,accountId,amount,type,categoryId:categoryId||'',merchant:merchant||'',note:note||'',timestamp:ts,source:source||'manual',fingerprint:f})
+  save()
+  return{success:true,duplicate:false}
+}
+
+function money(n){if(!n)return'0.00';n=Number(n);return Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',')}
+function fmtDate(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())}
+function fmtDateShort(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return d.getMonth()+1+'/'+d.getDate()}
+function getMonthRange(){const n=new Date();return{start:new Date(n.getFullYear(),n.getMonth(),1).getTime(),end:new Date(n.getFullYear(),n.getMonth()+1,0,23,59,59).getTime()}}
+
+// ===== 月度统计（排除转账） =====
+function getMonthStats(){
+  const{start,end}=getMonthRange()
+  const txns=db.transactions.filter(t=>t.timestamp>=start&&t.timestamp<=end&&t.type!=='transfer')
+  let exp=0,inc=0
+  txns.forEach(t=>{if(t.type==='expense')exp+=t.amount;else if(t.type==='income')inc+=t.amount})
+  return{exp,inc,bal:inc-exp}
+}
+
+// ===== 对账 =====
+function reconcile(){
+  return db.accounts.map(acc=>{
+    const txns=db.transactions.filter(t=>t.accountId===acc._id||t.toAccountId===acc._id)
+    let inc=0,exp=0
+    txns.forEach(t=>{
+      if(t.type==='transfer'){
+        if(t.accountId===acc._id)exp+=t.amount  // 转出
+        if(t.toAccountId===acc._id)inc+=t.amount  // 转入
+      }else{
+        if(t.type==='expense')exp+=t.amount
+        else if(t.type==='income')inc+=t.amount
+      }
+    })
+    // 信用卡：消费增加欠款（余额变负），还款减少欠款
+    const expected=acc.type==='credit'?acc.initialBalance-exp+inc:acc.initialBalance+inc-exp
+    const actual=Number(acc.currentBalance)
+    const diff=actual-expected
+    return{...acc,income:inc,expense:exp,expectedBalance:Math.round(expected*100)/100,actualBalance:actual,diff:Math.round(diff*100)/100,isMatch:Math.abs(diff)<0.01,txnCount:txns.length}
+  })
+}
+
+// ===== 渲染 =====
+function render(){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.t===currentTab))
+  const c=document.getElementById('content')
+  if(currentTab==='stats')c.innerHTML=renderStats()
+  else if(currentTab==='list')c.innerHTML=renderList()
+  else if(currentTab==='acc')c.innerHTML=renderAcc()
+  else if(currentTab==='rec')c.innerHTML=renderRec()
+  else if(currentTab==='imp')c.innerHTML=renderImp()
+}
+
+// --- 统计Tab ---
+let statsState={period:'month',offset:0} // offset: 相对当前周期的偏移
+function getPeriodRange(){
+  const{period,offset}=statsState
+  const now=new Date()
+  let start,end,label
+  if(period==='day'){
+    const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+offset)
+    start=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()
+    end=new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59).getTime()
+    label=d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'
+  }else if(period==='week'){
+    const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+offset*7)
+    const day=d.getDay()||7
+    const monday=new Date(d);monday.setDate(d.getDate()-day+1)
+    const sunday=new Date(monday);sunday.setDate(monday.getDate()+6)
+    start=new Date(monday.getFullYear(),monday.getMonth(),monday.getDate()).getTime()
+    end=new Date(sunday.getFullYear(),sunday.getMonth(),sunday.getDate(),23,59,59).getTime()
+    label=(monday.getMonth()+1)+'/'+monday.getDate()+' - '+(sunday.getMonth()+1)+'/'+sunday.getDate()
+  }else if(period==='month'){
+    const d=new Date(now.getFullYear(),now.getMonth()+offset,1)
+    start=new Date(d.getFullYear(),d.getMonth(),1).getTime()
+    end=new Date(d.getFullYear(),d.getMonth()+1,0,23,59,59).getTime()
+    label=d.getFullYear()+'年'+(d.getMonth()+1)+'月'
+  }else{
+    const y=now.getFullYear()+offset
+    start=new Date(y,0,1).getTime()
+    end=new Date(y,11,31,23,59,59).getTime()
+    label=y+'年'
+  }
+  return{start,end,label}
+}
+function renderStats(){
+  const{start,end,label}=getPeriodRange()
+  const txns=db.transactions.filter(t=>t.type!=='transfer'&&t.timestamp>=start&&t.timestamp<=end).sort((a,b)=>b.timestamp-a.timestamp)
+  let exp=0,inc=0
+  txns.forEach(t=>{if(t.type==='expense')exp+=t.amount;else if(t.type==='income')inc+=t.amount})
+  // 按分类统计支出
+  const catMap={}
+  txns.filter(t=>t.type==='expense').forEach(t=>{
+    const cat=db.categories.find(c=>c._id===t.categoryId)
+    const name=cat?cat.name:'未分类'
+    if(!catMap[name])catMap[name]={amount:0,icon:cat?cat.icon:'📝'}
+    catMap[name].amount+=t.amount
+  })
+  const cats=Object.entries(catMap).map(([name,v])=>({name,...v})).sort((a,b)=>b.amount-a.amount)
+  // 按账户统计
+  const accMap={}
+  txns.forEach(t=>{
+    const acc=db.accounts.find(a=>a._id===t.accountId)
+    const name=acc?acc.name:'未知'
+    if(!accMap[name])accMap[name]={expense:0,income:0,icon:acc?acc.icon:'💰'}
+    if(t.type==='expense')accMap[name].expense+=t.amount
+    else accMap[name].income+=t.amount
+  })
+  const accs=Object.entries(accMap).map(([name,v])=>({name,...v})).sort((a,b)=>b.expense-a.expense)
+  const maxCat=cats.length?cats[0].amount:1
+  const maxAcc=accs.length?Math.max(...accs.map(a=>a.expense)):1
+  const periods=[['day','日'],['week','周'],['month','月'],['year','年']]
+  return`<div class="card" style="background:linear-gradient(135deg,var(--blue),var(--blue-dark));color:#fff;text-align:center;padding:24px">
+    <div style="font-size:13px;opacity:.85">${label}</div>
+    <div style="font-size:32px;font-weight:700;margin:4px 0">¥ ${money(exp)}</div>
+    <div style="font-size:12px;opacity:.8">收入 ¥${money(inc)} ｜ 结余 ¥${money(inc-exp)}</div>
+  </div>
+  <div class="type-sel" style="margin-bottom:12px">
+    ${periods.map(([v,n])=>`<div class="type-btn ${statsState.period===v?'active':''}" onclick="statsState.period='${v}';statsState.offset=0;render()">${n}</div>`).join('')}
+  </div>
+  <div class="card" style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px">
+    <div style="cursor:pointer;font-size:20px;color:var(--blue)" onclick="statsState.offset--;render()">‹</div>
+    <div style="font-size:15px;font-weight:600">${label}</div>
+    <div style="cursor:pointer;font-size:20px;color:var(--blue)" onclick="statsState.offset++;render()">›</div>
+  </div>
+  ${cats.length?`<div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:12px">支出分类</div>${cats.map(c=>`
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${c.icon} ${c.name}</span><span style="font-weight:600">¥${money(c.amount)}</span></div>
+      <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.round(c.amount/maxCat*100)}%;background:var(--blue);border-radius:4px"></div></div>
+    </div>`).join('')}</div>`:''}
+  ${accs.length?`<div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:12px">账户收支</div>${accs.map(a=>`
+    <div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:18px;margin-right:8px">${a.icon}</span>
+      <span style="flex:1;font-size:13px">${a.name}</span>
+      <span style="color:var(--red);font-size:13px;font-weight:600">-¥${money(a.expense)}</span>
+      ${a.income>0?`<span style="color:var(--green);font-size:13px;margin-left:8px">+¥${money(a.income)}</span>`:''}
+    </div>`).join('')}</div>`:''}
+  <div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:12px">交易明细（${txns.length}条）</div>${txns.length?txns.map(t=>{
+    const acc=db.accounts.find(a=>a._id===t.accountId)
+    const cat=db.categories.find(c=>c._id===t.categoryId)
+    return`<div class="tx-item"><span class="tx-pill ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'支':'收'}</span><div class="tx-info"><div class="tx-mer">${t.merchant||(cat&&cat.name)||'未分类'}</div><div class="tx-date">${fmtDateShort(t.timestamp)} · ${acc?acc.name:''}</div></div><div class="tx-amt ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'-':'+'}¥${money(t.amount)}</div></div>`
+  }).join(''):'<div style="text-align:center;color:var(--muted);padding:20px">该时段无交易</div>'}</div>`
+}
+
+// --- 流水Tab ---
+let listFilter={accountId:'',month:''}
+function renderList(){
+  const{start,end}=getMonthRange()
+  let txns=db.transactions.filter(t=>t.type!=='transfer')
+  if(listFilter.accountId)txns=txns.filter(t=>t.accountId===listFilter.accountId)
+  txns=txns.sort((a,b)=>b.timestamp-a.timestamp)
+  let exp=0,inc=0
+  txns.forEach(t=>{if(t.type==='expense')exp+=t.amount;else if(t.type==='income')inc+=t.amount})
+  const accOpts=['全部账户',...db.accounts.map(a=>a.icon+' '+a.name)]
+  const accIdx=listFilter.accountId?accOpts.findIndex((_,i)=>i>0&&db.accounts[i-1]._id===listFilter.accountId):0
+  const items=txns.length?txns.map(t=>{
+    const acc=db.accounts.find(a=>a._id===t.accountId)
+    const cat=db.categories.find(c=>c._id===t.categoryId)||{}
+    const pill=t.type==='expense'?'<span class="pill pill-exp">支出</span>':t.type==='income'?'<span class="pill pill-inc">收入</span>':''
+    return`<div class="tx-item"><div class="tx-ic ${t.type==='expense'?'exp':'inc'}">${cat.icon||(t.type==='expense'?'💰':'💵')}</div><div class="tx-info"><div class="tx-mer">${t.merchant||t.note||cat.name||'未分类'}</div><div class="tx-sub">${acc?acc.name:''} · ${fmtDateShort(t.timestamp)} ${pill}</div></div><div class="tx-amt ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'-':'+'}¥${money(t.amount)}</div></div>`
+  }).join(''):'<div class="empty">暂无交易记录</div>'
+  return`<div class="summary"><div class="sum-item"><div class="sum-lbl">支出</div><div class="sum-val sum-exp">¥${money(exp)}</div></div><div class="sum-item"><div class="sum-lbl">收入</div><div class="sum-val sum-inc">¥${money(inc)}</div></div><div class="sum-item"><div class="sum-lbl">结余</div><div class="sum-val sum-bal">¥${money(inc-exp)}</div></div></div>
+  <select class="input" style="margin-bottom:12px" onchange="listFilter.accountId=this.value;render()"><option value="">全部账户</option>${db.accounts.map(a=>`<option value="${a._id}" ${listFilter.accountId===a._id?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select>
+  <div class="card">${items}</div>`
+}
+
+// --- 账户Tab ---
+function renderAcc(){
+  const items=db.accounts.map(a=>{
+    const bal=Number(a.currentBalance)
+    const isNeg=bal<0
+    return`<div class="card"><div style="display:flex;align-items:center"><span style="font-size:28px;margin-right:12px">${a.icon}</span><div style="flex:1"><div style="font-size:16px;font-weight:600">${a.name}</div><div style="font-size:12px;color:var(--muted)">${{cash:'现金',savings:'储蓄卡',credit:'信用卡',ewallet:'电子钱包'}[a.type]||a.type}</div></div><div class="acc-bal ${isNeg?'neg':''}">${isNeg?'-':''}¥${money(bal)}</div></div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-out" onclick="editAcc('${a._id}')">编辑</button><button class="btn btn-sm btn-out" style="color:var(--red)" onclick="delAcc('${a._id}')">删除</button></div></div>`
+  }).join('')
+  return items+`<button class="btn btn-out" style="color:var(--blue)" onclick="editAcc('')">+ 添加账户</button>`
+}
+function editAcc(id){
+  const a=id?db.accounts.find(x=>x._id===id):{name:'',type:'savings',icon:'💰',initialBalance:'',currentBalance:''}
+  const icons=['💰','🏦','💳','💵','💚','💙','🪙','📈']
+  const types=[{l:'现金',v:'cash'},{l:'储蓄卡',v:'savings'},{l:'信用卡',v:'credit'},{l:'电子钱包',v:'ewallet'}]
+  showModal(`<div class="modal-t">${id?'编辑账户':'添加账户'}</div>
+  <div class="row"><span class="row-label">名称</span><input class="row-input row-val" id="acc-name" value="${a.name}" placeholder="账户名称"></div>
+  <div class="row"><span class="row-label">类型</span><select class="row-input row-val" id="acc-type">${types.map(t=>`<option value="${t.v}" ${a.type===t.v?'selected':''}>${t.l}</option>`).join('')}</select></div>
+  <div class="row"><span class="row-label">图标</span><div style="display:flex;flex-wrap:wrap;gap:8px">${icons.map(ic=>`<div onclick="document.getElementById('acc-ic').value='${ic}'" style="cursor:pointer;font-size:24px;padding:4px 8px;border-radius:8px;${a.icon===ic?'background:var(--blue-light)':''}">${ic}</div>`).join('')}</div><input type="hidden" id="acc-ic" value="${a.icon}"></div>
+  <div class="row"><span class="row-label">初始余额</span><input class="row-input row-val" type="number" id="acc-init" value="${a.initialBalance}" placeholder="0.00"></div>
+  <div class="row"><span class="row-label">当前余额</span><input class="row-input row-val" type="number" id="acc-cur" value="${a.currentBalance}" placeholder="0.00"></div>
+  <div style="font-size:12px;color:var(--muted);padding:8px 0">信用卡余额可为负数（表示欠款）。"当前余额"用于对账——与系统算出的应有余额对比。</div>
+  <button class="btn" style="margin-top:12px" onclick="saveAcc('${id}')">保存</button>
+  <div class="row" style="cursor:pointer" onclick="hideModal()"><span style="color:var(--muted);text-align:center;width:100%">取消</span></div>`)
+}
+function saveAcc(id){
+  const name=document.getElementById('acc-name').value
+  if(!name)return toast('请输入账户名称')
+  const data={name,type:document.getElementById('acc-type').value,icon:document.getElementById('acc-ic').value,initialBalance:Number(document.getElementById('acc-init').value||0),currentBalance:Number(document.getElementById('acc-cur').value||0)}
+  if(id){Object.assign(db.accounts.find(a=>a._id===id),data)}else{db.accounts.push({_id:'a_'+Date.now(),...data,sortOrder:db.accounts.length+1})}
+  save();hideModal();render();toast('已保存')
+}
+async function delAcc(id){
+  const cnt=db.transactions.filter(t=>t.accountId===id||t.toAccountId===id).length
+  if(cnt>0)return toast('该账户下有交易记录\n请先处理相关交易')
+  if(!confirm('确认删除？'))return
+  db.accounts=db.accounts.filter(a=>a._id!==id);save();render();toast('已删除')
+}
+
+// --- 对账Tab ---
+function renderRec(){
+  const results=reconcile()
+  const matched=results.filter(r=>r.isMatch).length
+  const mismatched=results.length-matched
+  const cards=results.map(r=>{
+    const sign=r.expectedBalance<0?'-':''
+    return`<div class="rec"><div class="rec-l ${r.isMatch?'ok':'warn'}"></div><div class="rec-c">
+      <div class="rec-h"><span style="font-size:20px">${r.icon}</span><span class="rec-n">${r.name}</span><span class="rec-badge ${r.isMatch?'ok':'warn'}">${r.isMatch?'✓ 对得上':'✗ 对不上'}</span></div>
+      <div class="rec-row"><span class="rec-lbl">交易笔数</span><span class="rec-val">${r.txnCount} 笔</span></div>
+      <div class="rec-row"><span class="rec-lbl">收入</span><span class="rec-val" style="color:var(--green)">+¥${money(r.income)}</span></div>
+      <div class="rec-row"><span class="rec-lbl">支出</span><span class="rec-val" style="color:var(--red)">-¥${money(r.expense)}</span></div>
+      <div class="rec-row"><span class="rec-lbl">应有余额</span><span class="rec-val">${sign}¥${money(Math.abs(r.expectedBalance))}</span></div>
+      <div class="rec-row"><span class="rec-lbl">实际余额</span><span class="rec-val">¥${money(r.actualBalance)}</span></div>
+      <div class="rec-row"><span class="rec-lbl">差额</span><span class="rec-val ${r.isMatch?'':'warn'}">${r.diff>0?'+':''}¥${money(r.diff)}</span></div>
+      ${r.isMatch?'':`<div style="margin-top:10px;padding:8px 12px;background:#fef2f2;border-radius:8px;font-size:12px;color:#dc2626">⚠ 差额 ¥${money(Math.abs(r.diff))}，可能漏记或错记</div><button class="btn btn-sm btn-out" style="margin-top:8px;color:var(--blue)" onclick="updateActual('${r._id}',${r.expectedBalance})">以应有余额更新实际值</button>`}
+    </div></div>`
+  }).join('')
+  return`<div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:6px">余额对账</div><div style="font-size:12px;color:var(--muted);line-height:1.6">对比每个账户的"应有余额"（系统按交易算出）vs"实际余额"（你填的），差额≠0说明有漏记或错记。<br>信用卡：消费增加欠款（余额变负），还款转账减少欠款。</div></div>
+  <div class="summary"><div class="sum-item"><div class="sum-lbl">对得上</div><div class="sum-val" style="color:var(--green)">${matched}</div></div><div class="sum-item"><div class="sum-lbl">对不上</div><div class="sum-val" style="color:var(--red)">${mismatched}</div></div></div>
+  ${cards||'<div class="empty">暂无账户</div>'}
+  <button class="btn btn-out" style="color:var(--blue)" onclick="render()">刷新对账</button>`
+}
+function updateActual(id,expected){
+  if(!confirm(`将实际余额设为 ¥${money(expected)}？\n\n建议先检查该账户流水确认没有漏记再更新。`))return
+  db.accounts.find(a=>a._id===id).currentBalance=expected;save();render();toast('已更新')
+}
+
+// --- 导入Tab ---
+let impState={format:'bank',accountId:'',fileName:'',records:null,result:null}
+function renderImp(){
+  const acc=db.accounts.find(a=>a._id===impState.accountId)
+  const formats=[
+    {v:'bank',n:'银行流水（智能识别）',d:'招行/工行/建行/农行/中行 CSV + Excel'},
+    {v:'cmb_pdf',n:'招行信用卡PDF',d:'招行信用卡账单 PDF 文件'},
+    {v:'generic',n:'通用CSV',d:'金额,时间,商户,分类'},
+  ]
+  const fmtHTML=formats.map(f=>`<div class="fmt-opt ${impState.format===f.v?'active':''}" onclick="impState.format='${f.v}';impState.records=null;impState.result=null;render()"><div class="fmt-n">${f.n}</div><div class="fmt-d">${f.d}</div></div>`).join('')
+  let prevHTML=''
+  if(impState.records){
+    const preview=impState.records.slice(0,20)
+    prevHTML=`<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:10px">预览（前${preview.length}条，共${impState.records.length}条）</div>${preview.map(r=>`<div class="pr-row"><div class="pr-type ${r.type==='expense'?'exp':'inc'}">${r.type==='expense'?'支':'收'}</div><div class="pr-info"><div class="pr-mer">${r.merchant||'(无商户)'}</div><div class="pr-date">${fmtDateShort(r.timestamp)}</div></div><div class="pr-amt ${r.type==='expense'?'exp':'inc'}">${r.type==='expense'?'-':'+'}¥${money(r.amount)}</div></div>`).join('')}</div><button class="btn" onclick="doImport()">确认导入 ${impState.records.length} 条</button>`
+  }
+  let resHTML=''
+  if(impState.result){const r=impState.result;resHTML=`<div class="card" style="border-left:4px solid var(--blue)"><div style="font-weight:600;margin-bottom:8px">导入结果</div><div class="rec-row"><span class="rec-lbl">总条数</span><span>${r.total}</span></div><div class="rec-row"><span class="rec-lbl">新增</span><span style="color:var(--green)">${r.imported}</span></div><div class="rec-row"><span class="rec-lbl">去重跳过</span><span style="color:var(--orange)">${r.skipped}</span></div>${r.skippedRecords&&r.skippedRecords.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">跳过的交易：</div>${r.skippedRecords.map(s=>`<div class="rec-row"><span class="rec-lbl" style="font-size:12px">${fmtDateShort(s.timestamp)}</span><span style="font-size:12px">${s.type==='income'?'退款':'消费'} ¥${money(s.amount)} ${s.merchant||''}</span></div>`).join('')}</div>`:''}</div>`}
+  return`<div class="card"><div style="font-size:16px;font-weight:600;margin-bottom:4px">导入账单</div><div style="font-size:12px;color:var(--muted);line-height:1.6">支持 CSV、Excel(.xlsx/.xls)、PDF 文件，自动去重（指纹匹配）后入库。</div></div>
+  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:12px">① 选择导入到哪个账户</div><div style="background:var(--bg);border-radius:10px;padding:14px;cursor:pointer" onclick="showImpAccPicker()">${acc?acc.icon+' '+acc.name:'请选择 ▾'}<span style="float:right">▾</span></div></div>
+  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:12px">② 选择账单格式</div>${fmtHTML}</div>
+  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:12px">③ 选择文件</div><div class="upload" onclick="document.getElementById('fileInput').click()">${impState.fileName||'点击选择文件（CSV / Excel / PDF）'}</div><input type="file" id="fileInput" accept=".csv,.txt,.xls,.xlsx,.pdf" style="display:none" onchange="handleFile(this)"></div>
+  ${prevHTML}${resHTML}`
+}
+function showImpAccPicker(){
+  const items=db.accounts.map(a=>`<div class="row" style="cursor:pointer" onclick="impState.accountId='${a._id}';hideModal();render()"><span style="font-size:20px">${a.icon}</span><span style="margin-left:10px">${a.name}</span></div>`).join('')
+  showModal(`<div class="modal-t">选择账户</div>${items}`)
+}
+
+// ===== 文件处理 =====
+async function handleFile(input){
+  const file=input.files[0];if(!file)return
+  impState.fileName=file.name;impState.records=null;impState.result=null;render()
+  try{
+    if(impState.format==='cmb_pdf'){
+      await handlePDF(file)
+    }else{
+      const buf=await file.arrayBuffer()
+      const ub=new Uint8Array(buf)
+      const isExcel=(ub[0]===0xD0&&ub[1]===0xCF&&ub[2]===0x11&&ub[3]===0xE0)||(ub[0]===0x50&&ub[1]===0x4B&&ub[2]===0x03&&ub[3]===0x04)||/\.xlsx?$/i.test(file.name)
+      if(isExcel&&typeof XLSX!=='undefined'){
+        const wb=XLSX.read(ub,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]]
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''})
+        const stringRows=rows.map(r=>(Array.isArray(r)?r:[]).map(c=>String(c||'').trim()))
+        impState.records=parseBankRows(stringRows)
+      }else{
+        const text=new TextDecoder('utf-8').decode(ub)
+        if(impState.format==='bank')impState.records=parseBankCSV(text)
+        else if(impState.format==='generic')impState.records=parseGenericCSV(text)
+      }
+    }
+    render()
+    if(impState.records&&impState.records.length===0)toast('未解析出有效记录\n请检查文件格式')
+    else if(impState.records)toast('解析出 '+impState.records.length+' 条记录')
+  }catch(e){console.error(e);toast('解析失败：'+e.message)}
+}
+
+// ===== PDF解析（招行信用卡） =====
+async function handlePDF(file){
+  const buf=await file.arrayBuffer()
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
+  const doc=await pdfjsLib.getDocument({data:buf}).promise
+  let currentType='消费',year=new Date().getFullYear()
+  const records=[]
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p)
+    const content=await page.getTextContent()
+    const items=content.items.filter(i=>i.str.trim()).map(i=>({str:i.str.trim(),x:Math.round(i.transform[4]),y:Math.round(i.transform[5])}))
+    // 按Y分组（页内）
+    items.sort((a,b)=>b.y-a.y)
+    const rows=[];let curRow=[],curY=null
+    for(const item of items){
+      if(curY===null||Math.abs(item.y-curY)<=4){curRow.push(item);curY=item.y}
+      else{if(curRow.length)rows.push(curRow);curRow=[item];curY=item.y}
+    }
+    if(curRow.length)rows.push(curRow)
+    // 按X分列
+    const tableRows=rows.map(row=>{
+      row.sort((a,b)=>a.x-b.x)
+      const c={transDate:'',postDate:'',desc:'',amount:''}
+      for(const item of row){
+        if(item.x<90)c.transDate+=item.str
+        else if(item.x<135)c.postDate+=item.str
+        else if(item.x<360)c.desc+=item.str
+        else if(item.x<450)c.amount+=item.str
+      }
+      Object.keys(c).forEach(k=>c[k]=c[k].trim());return c
+    })
+    // 解析交易
+    for(const row of tableRows){
+      const ym=row.desc.match(/(\d{4})年/);if(ym)year=parseInt(ym[1])
+      if(row.transDate==='还款'||row.desc==='还款'){currentType='还款';continue}
+      if(row.transDate==='退款'||row.desc==='退款'){currentType='退款';continue}
+      if(row.transDate==='消费'||row.desc==='消费'){currentType='消费';continue}
+      if(!row.transDate||!/^\d{2}\/\d{2}$/.test(row.transDate))continue
+      if(!row.amount)continue
+      const amt=parseFloat(row.amount.replace(/[,，]/g,'').replace(/−/g,'-'))
+      if(isNaN(amt)||amt===0)continue
+      if(currentType==='还款')continue  // 跳过还款（转账，不算消费）
+      const[mm,dd]=row.transDate.split('/')
+      const ts=new Date(year,parseInt(mm)-1,parseInt(dd)).getTime()
+      records.push({amount:Math.abs(amt),type:currentType==='退款'?'income':'expense',merchant:row.desc,timestamp:ts,note:currentType})
+    }
+  }
+  impState.records=records
+}
+
+// ===== CSV/Excel解析器 =====
+function splitCSVLine(line){const cols=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"')inQ=!inQ;else if(c===','&&!inQ){cols.push(cur.trim());cur=''}else cur+=c}cols.push(cur.trim());return cols}
+function parseDate(str){if(!str)return null;str=str.trim();let m=str.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[\sT]+(\d{1,2}):(\d{1,2})/);if(m)return new Date(m[1],m[2]-1,m[3],m[4],m[5]).getTime();m=str.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);if(m)return new Date(m[1],m[2]-1,m[3]).getTime();m=str.match(/^(\d{4})(\d{2})(\d{2})$/);if(m)return new Date(m[1],m[2]-1,m[3]).getTime();m=str.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/);if(m)return new Date(m[1],m[2]-1,m[3],m[4],m[5]).getTime();return null}
+function cleanAmount(str){if(!str)return'0';return String(str).replace(/−/g,'-').replace(/—/g,'-').replace(/[,，]/g,'').replace(/[^\d.-]/g,'')}
+function parseBankRows(rows){
+  let header=null,dataStart=0
+  for(let i=0;i<Math.min(rows.length,10);i++){const cols=rows[i];let dIdx=-1,aIdx=-1;for(let j=0;j<cols.length;j++){const c=cols[j]||'';if(dIdx<0&&/日期|时间|记账/.test(c))dIdx=j;if(aIdx<0&&/金额|发生额|支出|收入|交易额/.test(c))aIdx=j}if(dIdx>=0&&aIdx>=0&&dIdx!==aIdx){header=cols;dataStart=i+1;break}}
+  if(!header){dataStart=1;header=[]}
+  const map=detectBankCols(header)
+  const records=[]
+  for(let i=dataStart;i<rows.length;i++){const cols=rows[i];if(!cols)continue;const r=parseBankRow(cols,map);if(r&&r.amount)records.push(r)}
+  return records
+}
+function parseBankCSV(text){return parseBankRows(text.split(/\r?\n/).filter(l=>l.trim()).map(splitCSVLine))}
+function detectBankCols(h){
+  const m={dateCol:-1,amountCol:-1,incomeCol:-1,expenseCol:-1,merchantCol:-1,noteCol:-1,amountMode:'sign'}
+  for(let i=0;i<h.length;i++){const t=h[i].trim();if(/户名|商户|交易对方|对方名称/.test(t)){m.merchantCol=i;break}}
+  for(let i=0;i<h.length;i++){const t=h[i].trim();if(m.dateCol<0&&/日期|时间|记账/.test(t))m.dateCol=i;if(/^收入$|收入金额|贷方|存入/.test(t)){m.incomeCol=i;m.amountMode='income_expense'}if(/^支出$|支出金额|借方|支出/.test(t)){m.expenseCol=i;m.amountMode='income_expense'}if(m.amountCol<0&&/金额|发生额|交易额|本期金额/.test(t)&&!/收入|支出|贷方|借方/.test(t))m.amountCol=i;if(m.merchantCol<0&&/描述|摘要/.test(t))m.merchantCol=i;if(m.noteCol<0&&/备注|附言|用途/.test(t))m.noteCol=i}
+  return m
+}
+function parseBankRow(cols,map){
+  const ts=parseDate(map.dateCol>=0?cols[map.dateCol]:'');if(!ts)return null
+  let amount=0,type='expense'
+  if(map.amountMode==='income_expense'){const inc=parseFloat(cleanAmount(map.incomeCol>=0?cols[map.incomeCol]:''))||0;const exp=parseFloat(cleanAmount(map.expenseCol>=0?cols[map.expenseCol]:''))||0;if(inc>0){amount=inc;type='income'}else if(exp>0){amount=exp;type='expense'}else return null}
+  else{const raw=parseFloat(cleanAmount(map.amountCol>=0?cols[map.amountCol]:''));if(isNaN(raw)||raw===0)return null;amount=Math.abs(raw);type=raw>0?'income':'expense'}
+  let merchant=(map.merchantCol>=0?cols[map.merchantCol]:'').trim();if(merchant.includes('/')){const parts=merchant.split('/');merchant=parts[parts.length-1].trim()}
+  return{amount,type,merchant,timestamp:ts}
+}
+function parseGenericCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());const records=[];let start=0
+  if(lines.length>0&&lines[0].split(',').some(c=>/金额|时间|日期/.test(c)))start=1
+  for(let i=start;i<lines.length;i++){const cols=splitCSVLine(lines[i]);if(!cols||cols.length<2)continue;const amount=parseFloat(cleanAmount(cols[0]));if(!amount)continue;const ts=parseDate(cols[1]);if(!ts)continue;records.push({amount:Math.abs(amount),type:amount>0?'income':'expense',merchant:cols[2]||'',timestamp:ts})}
+  return records
+}
+
+// ===== 执行导入 =====
+function doImport(){
+  if(!impState.records)return
+  let imported=0,skipped=0
+  const skippedRecords=[]
+  impState.records.forEach(r=>{
+    const res=addTx({amount:r.amount,type:r.type,accountId:impState.accountId,merchant:r.merchant,note:r.note||'',timestamp:r.timestamp,source:impState.format})
+    if(res.duplicate){skipped++;skippedRecords.push(r)}else imported++
+  })
+  impState.result={total:impState.records.length,imported,skipped,skippedRecords}
+  impState.records=null;render()
+  toast(`导入 ${imported} 条\n跳过重复 ${skipped} 条`,3000)
+}
+
+// ===== 清空数据 =====
+function confirmClear(){
+  showModal(`<div class="modal-t">⚠ 清空所有数据</div>
+  <div style="text-align:center;padding:20px 0">
+    <div style="font-size:48px;margin-bottom:16px">🗑</div>
+    <div style="font-size:15px;color:var(--text);margin-bottom:8px">确认清空所有记账数据？</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6">这将删除所有账户、交易记录<br>操作不可撤销</div>
+  </div>
+  <button class="btn btn-danger" style="margin-top:12px" onclick="doClear()">确认清空</button>
+  <div class="row" style="cursor:pointer" onclick="hideModal()"><span style="color:var(--muted);text-align:center;width:100%">取消</span></div>`)
+}
+function doClear(){
+  if(!confirm('再次确认：真的要清空所有数据吗？'))return
+  initDB();hideModal();render();toast('已清空所有数据')
+}
+
+// ===== 工具函数 =====
+function switchTab(t){currentTab=t;render()}
+function showModal(html){document.getElementById('modalC').innerHTML=html;document.getElementById('modal').classList.remove('hidden')}
+function hideModal(){document.getElementById('modal').classList.add('hidden')}
+let toastTimer
+function toast(msg,dur=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.add('hidden'),dur)}
+
+// ===== 初始化 =====
+load()
+if(!db.accounts||db.accounts.length===0)initDB()
+render()
+</script>
+</body>
+</html>

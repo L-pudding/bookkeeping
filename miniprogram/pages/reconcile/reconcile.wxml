@@ -1,0 +1,69 @@
+<!-- pages/reconcile/reconcile.wxml -->
+<view class="container">
+  <view class="reconcile-header">
+    <view class="header-title">余额对账</view>
+    <view class="header-desc">每个账户的"应有余额"（系统按交易算出）vs"实际余额"（你设定的），差额≠0说明有漏记或错记</view>
+  </view>
+
+  <view class="reconcile-summary" wx:if="{{summary.total > 0}}">
+    <view class="summary-item match">
+      <text class="count">{{summary.matched}}</text>
+      <text class="label">对得上</text>
+    </view>
+    <view class="summary-item mismatch">
+      <text class="count">{{summary.mismatched}}</text>
+      <text class="label">对不上</text>
+    </view>
+  </view>
+
+  <view class="empty" wx:if="{{accounts.length === 0}}">暂无账户，请先在"账户"页面添加</view>
+
+  <view class="card reconcile-card {{item.isMatch ? 'ok' : 'warn'}}" wx:for="{{accounts}}" wx:key="_id">
+    <view class="rc-head">
+      <text class="rc-icon">{{item.icon}}</text>
+      <view class="rc-info">
+        <text class="rc-name">{{item.name}}</text>
+        <text class="rc-txcount">{{item.txnCount}}笔交易</text>
+      </view>
+      <view class="rc-status {{item.isMatch ? 'ok' : 'warn'}}">
+        {{item.isMatch ? '✓ 对平' : '⚠ 差额'}}
+      </view>
+    </view>
+
+    <view class="rc-rows">
+      <view class="rc-row">
+        <text class="rc-label">初始余额</text>
+        <text class="rc-val">¥{{item.initialBalanceStr}}</text>
+      </view>
+      <view class="rc-row">
+        <text class="rc-label">+ 收入合计</text>
+        <text class="rc-val income">¥{{item.totalIncomeStr}}</text>
+      </view>
+      <view class="rc-row">
+        <text class="rc-label">- 支出合计</text>
+        <text class="rc-val expense">¥{{item.totalExpenseStr}}</text>
+      </view>
+      <view class="rc-row total">
+        <text class="rc-label">= 应有余额</text>
+        <text class="rc-val">¥{{item.expectedBalanceStr}}</text>
+      </view>
+      <view class="rc-row">
+        <text class="rc-label">实际余额</text>
+        <text class="rc-val">¥{{item.actualBalanceStr}}</text>
+      </view>
+      <view class="rc-row diff {{item.isMatch ? '' : 'show'}}">
+        <text class="rc-label">差额</text>
+        <text class="rc-val {{item.isMatch ? '' : 'warn'}}">{{item.diff > 0 ? '+' : ''}}¥{{item.diffStr}}</text>
+      </view>
+    </view>
+
+    <view class="rc-actions" wx:if="{{!item.isMatch}}">
+      <view class="rc-btn" bindtap="updateActual" data-id="{{item._id}}" data-expected="{{item.expectedBalance}}">
+        以应有余额更新实际值
+      </view>
+      <view class="rc-hint">差额 ¥{{item.diffStr}}，可能漏记/错记。检查该账户的流水，或直接用"应有余额"更新实际值</view>
+    </view>
+  </view>
+
+  <button class="btn-primary" bindtap="refresh" style="margin-top: 20rpx;">刷新对账</button>
+</view>

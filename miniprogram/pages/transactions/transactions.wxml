@@ -1,0 +1,49 @@
+<!-- pages/transactions/transactions.wxml -->
+<view class="container">
+  <!-- 筛选栏 -->
+  <view class="filter-bar">
+    <picker mode="date" value="{{filterDate}}" bindchange="onDateChange" fields="month">
+      <view class="filter-item">{{filterDateLabel}} ▾</view>
+    </picker>
+    <picker mode="selector" range="{{accountNames}}" value="{{filterAccountIdx}}" bindchange="onAccountChange">
+      <view class="filter-item">{{accountNames[filterAccountIdx]}} ▾</view>
+    </picker>
+  </view>
+
+  <!-- 汇总 -->
+  <view class="summary-bar">
+    <view class="summary-item">
+      <text class="summary-label">支出</text>
+      <text class="summary-expense">¥{{totalExpense}}</text>
+    </view>
+    <view class="summary-item">
+      <text class="summary-label">收入</text>
+      <text class="summary-income">¥{{totalIncome}}</text>
+    </view>
+    <view class="summary-item">
+      <text class="summary-label">结余</text>
+      <text class="summary-balance">¥{{totalBalance}}</text>
+    </view>
+  </view>
+
+  <!-- 交易列表 -->
+  <view class="tx-list" wx:if="{{transactions.length > 0}}">
+    <view class="tx-item" wx:for="{{transactions}}" wx:key="_id">
+      <view class="tx-icon">{{item.categoryIcon || '📝'}}</view>
+      <view class="tx-main">
+        <view class="tx-top">
+          <text class="tx-category">{{item.category || '其他'}}</text>
+          <text class="tx-amount {{item.type}}">{{item.type === 'income' ? '+' : '-'}}¥{{item.amountStr}}</text>
+        </view>
+        <view class="tx-bottom">
+          <text class="tx-merchant">{{item.merchant || item.note || ''}}</text>
+          <text class="tx-account">{{item.accountName}}</text>
+        </view>
+        <view class="tx-time">{{item.timeStr}}</view>
+        <view class="tx-source" wx:if="{{item.source !== 'manual'}}">来自{{item.sourceLabel}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="empty" wx:else>暂无交易记录</view>
+</view>

@@ -1,0 +1,40 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/transactions/transactions",
+    "pages/accounts/accounts",
+    "pages/reconcile/reconcile",
+    "pages/import/import"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#4a90d9",
+    "navigationBarTitleText": "记账本",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f5f5"
+  },
+  "tabBar": {
+    "color": "#999",
+    "selectedColor": "#4a90d9",
+    "backgroundColor": "#fff",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "记账"
+      },
+      {
+        "pagePath": "pages/transactions/transactions",
+        "text": "流水"
+      },
+      {
+        "pagePath": "pages/accounts/accounts",
+        "text": "账户"
+      },
+      {
+        "pagePath": "pages/reconcile/reconcile",
+        "text": "对账"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

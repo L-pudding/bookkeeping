@@ -1,0 +1,16 @@
+{
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "newFeature": true
+  },
+  "appid": "your-appid-here",
+  "projectname": "bookkeeping",
+  "cloudfunctionTemplateRoot": "",
+  "condition": {}
+}

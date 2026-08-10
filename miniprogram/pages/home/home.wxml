@@ -1,0 +1,97 @@
+<!-- pages/home/home.wxml -->
+<view class="container">
+  <!-- 余额概览 -->
+  <view class="card balance-card">
+    <view class="balance-label">本月支出</view>
+    <view class="balance-amount">¥ {{monthExpense}}</view>
+    <view class="balance-sub">收入 ¥ {{monthIncome}} ｜ 结余 ¥ {{monthBalance}}</view>
+  </view>
+
+  <!-- 记账表单 -->
+  <view class="card">
+    <!-- 切换 收入/支出 -->
+    <view class="type-switch">
+      <view class="type-btn {{type === 'expense' ? 'active' : ''}}" bindtap="switchType" data-type="expense">支出</view>
+      <view class="type-btn {{type === 'income' ? 'active' : ''}}" bindtap="switchType" data-type="income">收入</view>
+    </view>
+
+    <!-- 金额输入 -->
+    <view class="amount-input">
+      <text class="currency">¥</text>
+      <input
+        type="digit"
+        class="amount-field"
+        placeholder="0.00"
+        value="{{amount}}"
+        bindinput="onAmountInput"
+        focus="{{amountFocus}}"
+      />
+    </view>
+
+    <!-- 账户选择 -->
+    <view class="input-row" bindtap="showAccountPicker">
+      <text class="input-label">账户</text>
+      <view class="input-value">
+        <text>{{selectedAccount ? selectedAccount.icon + ' ' + selectedAccount.name : '请选择'}}</text>
+      </view>
+    </view>
+
+    <!-- 分类选择 -->
+    <view class="input-row" bindtap="showCategoryPicker">
+      <text class="input-label">分类</text>
+      <view class="input-value">
+        <text>{{selectedCategory ? selectedCategory.icon + ' ' + selectedCategory.name : '请选择'}}</text>
+      </view>
+    </view>
+
+    <!-- 商户 -->
+    <view class="input-row">
+      <text class="input-label">商户</text>
+      <input class="input-value" placeholder="选填" value="{{merchant}}" bindinput="onMerchantInput" />
+    </view>
+
+    <!-- 备注 -->
+    <view class="input-row">
+      <text class="input-label">备注</text>
+      <input class="input-value" placeholder="选填" value="{{note}}" bindinput="onNoteInput" />
+    </view>
+
+    <!-- 保存 -->
+    <button class="btn-primary" bindtap="saveTransaction" disabled="{{!amount || !selectedAccount}}">保存</button>
+  </view>
+</view>
+
+<!-- 账户选择弹窗 -->
+<view class="mask" wx:if="{{accountPickerVisible}}" bindtap="hideAccountPicker">
+  <view class="picker" catchtap="">
+    <view class="picker-title">选择账户</view>
+    <view
+      wx:for="{{accounts}}"
+      wx:key="_id"
+      class="picker-item {{selectedAccount && selectedAccount._id === item._id ? 'selected' : ''}}"
+      bindtap="selectAccount"
+      data-id="{{item._id}}"
+    >{{item.icon}} {{item.name}}</view>
+    <view class="picker-cancel" bindtap="hideAccountPicker">取消</view>
+  </view>
+</view>
+
+<!-- 分类选择弹窗 -->
+<view class="mask" wx:if="{{categoryPickerVisible}}" bindtap="hideCategoryPicker">
+  <view class="picker" catchtap="">
+    <view class="picker-title">选择分类</view>
+    <view class="category-grid">
+      <view
+        wx:for="{{categories}}"
+        wx:key="_id"
+        class="category-item {{selectedCategory && selectedCategory._id === item._id ? 'selected' : ''}}"
+        bindtap="selectCategory"
+        data-id="{{item._id}}"
+      >
+        <view class="category-icon">{{item.icon}}</view>
+        <view class="category-name">{{item.name}}</view>
+      </view>
+    </view>
+    <view class="picker-cancel" bindtap="hideCategoryPicker">取消</view>
+  </view>
+</view>
