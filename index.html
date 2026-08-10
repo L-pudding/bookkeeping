@@ -6,6 +6,7 @@
 <title>记账本</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--blue:#3b82f6;--blue-light:#eff6ff;--blue-dark:#2563eb;--red:#ef4444;--green:#22c55e;--orange:#f59e0b;--bg:#f8fafc;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--shadow:0 1px 3px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06);--shadow-lg:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.05)}
@@ -93,13 +94,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .cat-tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--blue-light);color:var(--blue);cursor:pointer;margin-right:6px}
 .cat-tag.unassigned{background:#fef3c7;color:#92400e;border:1px dashed #d97706}
 @media(max-width:480px){.app{box-shadow:none}.modal{border-radius:0}}
+.login-bg{position:fixed;inset:0;background:linear-gradient(135deg,var(--blue),var(--blue-dark));display:flex;align-items:center;justify-content:center;z-index:200}
+.login-box{background:#fff;border-radius:20px;padding:40px 30px;width:320px;max-width:90vw;box-shadow:var(--shadow-lg)}
+.login-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:6px}
+.login-sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:24px}
+.login-inp{width:100%;padding:14px 16px;border:1px solid var(--border);border-radius:10px;font-size:15px;margin-bottom:12px;outline:none;transition:border .2s}
+.login-inp:focus{border-color:var(--blue)}
+.btn-full{width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px}
 </style>
 </head>
 <body>
-<div class="app">
+<!-- 登录页 -->
+<div class="login-bg" id="loginPage">
+  <div class="login-box">
+    <div class="login-title">📊 记账本</div>
+    <div class="login-sub">云端同步 · 多设备共享</div>
+    <input class="login-inp" id="loginEmail" type="email" placeholder="邮箱">
+    <input class="login-inp" id="loginPass" type="password" placeholder="密码">
+    <button class="btn-full" style="background:var(--blue);color:#fff" onclick="doLogin()">登 录</button>
+    <button class="btn-full" style="background:var(--blue-light);color:var(--blue)" onclick="doRegister()">注 册</button>
+    <div id="loginMsg" style="text-align:center;font-size:13px;margin-top:12px;min-height:18px"></div>
+  </div>
+</div>
+<!-- 主应用 -->
+<div class="app" id="mainApp" style="display:none">
   <div class="hdr">
     <span>记账本</span>
-    <button class="hdr-btn" onclick="confirmClear()">清空</button>
+    <div style="display:flex;gap:8px">
+      <span id="userBadge" style="font-size:12px;color:rgba(255,255,255,.7);margin-right:4px"></span>
+      <button class="hdr-btn" onclick="confirmClear()">清空</button>
+      <button class="hdr-btn" onclick="doLogout()">退出</button>
+    </div>
   </div>
   <div class="content" id="content"></div>
   <div class="tabs">
@@ -115,13 +140,100 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 <div id="toast" class="toast hidden"></div>
 
 <script>
+// ===== Supabase 云端同步 =====
+const SB_URL='https://ukxlzprtiposaejbotrp.supabase.co'
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVreGx6cHJ0aXBvc2FlamJvdHJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMzkzMjIsImV4cCI6MjEwMTkxNTMyMn0.kuJILGcGVuCwO5Bhwgulv4Zhc9-BurAitq88eklR0P8'
+let sb=null,sbUser=null
+try{sb=supabase.createClient(SB_URL,SB_KEY)}catch(e){console.error('Supabase初始化失败',e)}
+
+// 登录
+async function doLogin(){
+  const email=document.getElementById('loginEmail').value.trim()
+  const pass=document.getElementById('loginPass').value
+  if(!email||!pass){document.getElementById('loginMsg').textContent='请填写邮箱和密码';return}
+  document.getElementById('loginMsg').textContent='登录中...'
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pass})
+  if(error){document.getElementById('loginMsg').textContent='登录失败：'+error.message;return}
+  sbUser=data.user
+  document.getElementById('loginMsg').textContent=''
+  await loadFromCloud()
+  showApp()
+}
+// 注册
+async function doRegister(){
+  const email=document.getElementById('loginEmail').value.trim()
+  const pass=document.getElementById('loginPass').value
+  if(!email||!pass){document.getElementById('loginMsg').textContent='请填写邮箱和密码';return}
+  if(pass.length<6){document.getElementById('loginMsg').textContent='密码至少6位';return}
+  document.getElementById('loginMsg').textContent='注册中...'
+  const{data,error}=await sb.auth.signUp({email,password:pass})
+  if(error){document.getElementById('loginMsg').textContent='注册失败：'+error.message;return}
+  document.getElementById('loginMsg').textContent='注册成功，请点登录'
+}
+// 退出
+async function doLogout(){
+  await sb.auth.signOut()
+  sbUser=null
+  document.getElementById('mainApp').style.display='none'
+  document.getElementById('loginPage').style.display='flex'
+  document.getElementById('loginEmail').value=''
+  document.getElementById('loginPass').value=''
+}
+// 从云端加载数据
+async function loadFromCloud(){
+  const{data,error}=await sb.from('bookkeeping_data').select('data').eq('user_id',sbUser.id).single()
+  if(data&&data.data){
+    db=data.data
+    save()// 本地备份
+  }else if(error&&error.code==='PGRST116'){
+    // 新用户，没有数据，用初始数据
+    if(localStorage.getItem(STORE_KEY)){
+      // 本地有旧数据，迁移到云端
+      load()
+      await saveToCloud()
+    }else{
+      initDB()
+    }
+  }
+}
+// 保存到云端（防抖：1秒内多次保存只执行一次）
+let cloudTimer=null
+function saveToCloud(){
+  if(!sb||!sbUser)return
+  clearTimeout(cloudTimer)
+  cloudTimer=setTimeout(async()=>{
+    try{
+      await sb.from('bookkeeping_data').upsert({user_id:sbUser.id,data:db,updated_at:new Date().toISOString()})
+    }catch(e){console.error('云端保存失败',e)}
+  },1000)
+}
+// 显示主应用
+function showApp(){
+  document.getElementById('loginPage').style.display='none'
+  document.getElementById('mainApp').style.display=''
+  document.getElementById('userBadge').textContent=sbUser.email
+  if(!db.accounts||db.accounts.length===0)initDB()
+  render()
+}
+// 初始化认证
+async function initAuth(){
+  try{
+    const{data:{session}}=await sb.auth.getSession()
+    if(session){
+      sbUser=session.user
+      await loadFromCloud()
+      showApp()
+    }
+  }catch(e){console.error('Auth init failed',e)}
+}
+
 // ===== 数据层 =====
 const STORE_KEY='bookkeeping_v2'
 let db={accounts:[],transactions:[],categories:[]}
 let currentTab='list'
 
 function load(){const s=localStorage.getItem(STORE_KEY);if(s)db=JSON.parse(s)}
-function save(){localStorage.setItem(STORE_KEY,JSON.stringify(db))}
+function save(){localStorage.setItem(STORE_KEY,JSON.stringify(db));saveToCloud()}
 function initDB(){
   db={
     accounts:[
@@ -636,9 +748,7 @@ let toastTimer
 function toast(msg,dur=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.add('hidden'),dur)}
 
 // ===== 初始化 =====
-load()
-if(!db.accounts||db.accounts.length===0)initDB()
-render()
+initAuth()
 </script>
 </body>
 </html>
