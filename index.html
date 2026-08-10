@@ -105,8 +105,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
   <div class="tabs">
     <div class="tab active" data-t="list" onclick="switchTab('list')"><span class="tab-ic">📋</span>流水</div>
     <div class="tab" data-t="stats" onclick="switchTab('stats')"><span class="tab-ic">📊</span>统计</div>
-    <div class="tab" data-t="acc" onclick="switchTab('acc')"><span class="tab-ic">💳</span>账户</div>
-    <div class="tab" data-t="rec" onclick="switchTab('rec')"><span class="tab-ic">🔍</span>对账</div>
+    <div class="tab" data-t="analysis" onclick="switchTab('analysis')"><span class="tab-ic">📈</span>分析</div>
     <div class="tab" data-t="imp" onclick="switchTab('imp')"><span class="tab-ic">📥</span>导入</div>
   </div>
 </div>
@@ -193,26 +192,85 @@ function getMonthStats(){
   return{exp,inc,bal:inc-exp}
 }
 
-// ===== 对账 =====
-function reconcile(){
-  return db.accounts.map(acc=>{
-    const txns=db.transactions.filter(t=>t.accountId===acc._id||t.toAccountId===acc._id)
-    let inc=0,exp=0
-    txns.forEach(t=>{
-      if(t.type==='transfer'){
-        if(t.accountId===acc._id)exp+=t.amount  // 转出
-        if(t.toAccountId===acc._id)inc+=t.amount  // 转入
-      }else{
-        if(t.type==='expense')exp+=t.amount
-        else if(t.type==='income')inc+=t.amount
-      }
-    })
-    // 信用卡：消费增加欠款（余额变负），还款减少欠款
-    const expected=acc.type==='credit'?acc.initialBalance-exp+inc:acc.initialBalance+inc-exp
-    const actual=Number(acc.currentBalance)
-    const diff=actual-expected
-    return{...acc,income:inc,expense:exp,expectedBalance:Math.round(expected*100)/100,actualBalance:actual,diff:Math.round(diff*100)/100,isMatch:Math.abs(diff)<0.01,txnCount:txns.length}
+// ===== 分析Tab =====
+let analysisState={year:''} // '' = 全部年份
+const PIE_COLORS=['#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6','#14b8a6','#ec4899','#f97316','#6b7280','#a3a3a3']
+function renderAnalysis(){
+  const years=[...new Set(db.transactions.map(t=>new Date(t.timestamp).getFullYear()))].sort((a,b)=>b-a)
+  const yearOpts=['',...years]
+  const y=analysisState.year
+  let txns=db.transactions.filter(t=>t.type!=='transfer'&&t.type==='expense')
+  if(y)txns=txns.filter(t=>new Date(t.timestamp).getFullYear()===Number(y))
+  let totalExp=txns.reduce((s,t)=>s+t.amount,0)
+  // 分类占比
+  const catMap={}
+  txns.forEach(t=>{
+    const cat=db.categories.find(c=>c._id===t.categoryId)
+    const name=cat?cat.name:'未分类'
+    const icon=cat?cat.icon:'📝'
+    if(!catMap[name])catMap[name]={amount:0,icon}
+    catMap[name].amount+=t.amount
   })
+  const cats=Object.entries(catMap).map(([name,v])=>({name,...v,pct:totalExp>0?v.amount/totalExp*100:0})).sort((a,b)=>b.amount-a.amount)
+  // 消费排行（按商户）
+  const merMap={}
+  txns.forEach(t=>{
+    const m=t.merchant||t.note||'未分类'
+    if(!merMap[m])merMap[m]={amount:0,count:0}
+    merMap[m].amount+=t.amount
+    merMap[m].count++
+  })
+  const merchants=Object.entries(merMap).map(([name,v])=>({name,...v})).sort((a,b)=>b.amount-a.amount).slice(0,10)
+  const maxMer=merchants.length?merchants[0].amount:1
+  // 账户消费分布
+  const accMap={}
+  txns.forEach(t=>{
+    const acc=db.accounts.find(a=>a._id===t.accountId)
+    const name=acc?acc.name:'未知'
+    if(!accMap[name])accMap[name]={amount:0,icon:acc?acc.icon:'💰'}
+    accMap[name].amount+=t.amount
+  })
+  const accs=Object.entries(accMap).map(([name,v])=>({name,...v})).sort((a,b)=>b.amount-a.amount)
+  const maxAcc=accs.length?accs[0].amount:1
+  // 月度趋势
+  const monthMap={}
+  txns.forEach(t=>{
+    const d=new Date(t.timestamp)
+    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')
+    if(!monthMap[key])monthMap[key]={amount:0}
+    monthMap[key].amount+=t.amount
+  })
+  const months=Object.entries(monthMap).map(([k,v])=>({k,...v})).sort((a,b)=>a.k.localeCompare(b.k)).slice(-12)
+  const maxMonth=months.length?Math.max(...months.map(m=>m.amount)):1
+  // 饼图 conic-gradient
+  let pieDeg=0
+  const pieSegments=cats.map((c,i)=>{
+    const color=PIE_COLORS[i%PIE_COLORS.length]
+    const deg=c.pct*3.6
+    const seg=`${color} ${pieDeg}deg ${pieDeg+deg}deg`
+    pieDeg+=deg
+    return{...c,color:color,seg}
+  })
+  const pieGradient=`conic-gradient(${pieSegments.map(s=>s.seg).join(',')})`
+  return`<select class="input" style="margin-bottom:12px" onchange="analysisState.year=this.value;render()">
+    ${yearOpts.map(yo=>`<option value="${yo}" ${yo===y?'selected':''}>${yo||'全部年份'}</option>`).join('')}
+  </select>
+  <div class="card" style="background:linear-gradient(135deg,var(--blue),var(--blue-dark));color:#fff;text-align:center;padding:20px;margin-bottom:12px">
+    <div style="font-size:13px;opacity:.85">${y||'全部'}消费总额</div>
+    <div style="font-size:36px;font-weight:700;margin:4px 0">¥${money(totalExp)}</div>
+    <div style="font-size:12px;opacity:.8">${txns.length}笔支出</div>
+  </div>
+  ${cats.length?`<div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:16px">分类占比</div>
+    <div style="display:flex;align-items:center;gap:20px">
+      <div style="width:160px;height:160px;border-radius:50%;background:${pieGradient};flex-shrink:0;position:relative">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80px;height:80px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text)">¥${money(totalExp)}</div>
+      </div>
+      <div style="flex:1">${pieSegments.map(s=>`<div style="display:flex;align-items:center;margin-bottom:6px"><div style="width:12px;height:12px;border-radius:3px;background:${s.color};margin-right:8px;flex-shrink:0"></div><div style="flex:1;font-size:13px">${s.icon} ${s.name}</div><div style="font-size:12px;color:var(--muted);margin-left:8px">${s.pct.toFixed(1)}%</div><div style="font-size:13px;font-weight:600;margin-left:8px">¥${money(s.amount)}</div></div>`).join('')}</div>
+    </div>
+  </div>`:''}
+  ${merchants.length?`<div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:12px">消费排行 TOP${merchants.length}</div>${merchants.map(m=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name}</span><span style="font-weight:600;margin-left:8px">¥${money(m.amount)}</span><span style="color:var(--muted);margin-left:8px">${m.count}笔</span></div><div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.round(m.amount/maxMer*100)}%;background:var(--blue);border-radius:3px"></div></div></div>`).join('')}</div>`:''}
+  ${accs.length?`<div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:12px">账户消费分布</div>${accs.map(a=>`<div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:18px;margin-right:8px">${a.icon}</span><span style="flex:1;font-size:13px">${a.name}</span><div style="height:8px;background:var(--bg);border-radius:4px;flex:2;margin:0 12px;overflow:hidden"><div style="height:100%;width:${Math.round(a.amount/maxAcc*100)}%;background:var(--green);border-radius:4px"></div></div><span style="font-size:13px;font-weight:600;width:80px;text-align:right">¥${money(a.amount)}</span></div>`).join('')}</div>`:''}
+  ${months.length?`<div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:12px">月度趋势（近${months.length}个月）</div><div style="display:flex;align-items:flex-end;gap:4px;height:120px;padding-bottom:20px;border-bottom:1px solid var(--border)">${months.map(m=>{const h=maxMonth>0?Math.round(m.amount/maxMonth*100):0;const mn=m.k.split('-')[1];return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="font-size:9px;color:var(--muted);margin-bottom:2px">${m.amount>=1000?(m.amount/1000).toFixed(1)+'k':money(m.amount)}</div><div style="width:100%;height:${h}%;background:var(--blue);border-radius:3px 3px 0 0;min-height:2px"></div></div>`}).join('')}</div><div style="display:flex;gap:4px;margin-top:4px">${months.map(m=>`<div style="flex:1;text-align:center;font-size:9px;color:var(--muted)">${m.k.split('-')[1]}月</div>`).join('')}</div></div>`:''}`
 }
 
 // ===== 渲染 =====
@@ -220,9 +278,8 @@ function render(){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.t===currentTab))
   const c=document.getElementById('content')
   if(currentTab==='stats')c.innerHTML=renderStats()
+  else if(currentTab==='analysis')c.innerHTML=renderAnalysis()
   else if(currentTab==='list')c.innerHTML=renderList()
-  else if(currentTab==='acc')c.innerHTML=renderAcc()
-  else if(currentTab==='rec')c.innerHTML=renderRec()
   else if(currentTab==='imp')c.innerHTML=renderImp()
 }
 
@@ -368,72 +425,7 @@ function showTxDetail(txId){
   <div class="row" style="cursor:pointer" onclick="hideModal()"><span style="color:var(--muted)">关闭</span></div>`)
 }
 
-// --- 账户Tab ---
-function renderAcc(){
-  const items=db.accounts.map(a=>{
-    const bal=Number(a.currentBalance)
-    const isNeg=bal<0
-    return`<div class="card"><div style="display:flex;align-items:center"><span style="font-size:28px;margin-right:12px">${a.icon}</span><div style="flex:1"><div style="font-size:16px;font-weight:600">${a.name}</div><div style="font-size:12px;color:var(--muted)">${{cash:'现金',savings:'储蓄卡',credit:'信用卡',ewallet:'电子钱包'}[a.type]||a.type}</div></div><div class="acc-bal ${isNeg?'neg':''}">${isNeg?'-':''}¥${money(bal)}</div></div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-sm btn-out" onclick="editAcc('${a._id}')">编辑</button><button class="btn btn-sm btn-out" style="color:var(--red)" onclick="delAcc('${a._id}')">删除</button></div></div>`
-  }).join('')
-  return items+`<button class="btn btn-out" style="color:var(--blue)" onclick="editAcc('')">+ 添加账户</button>`
-}
-function editAcc(id){
-  const a=id?db.accounts.find(x=>x._id===id):{name:'',type:'savings',icon:'💰',initialBalance:'',currentBalance:''}
-  const icons=['💰','🏦','💳','💵','💚','💙','🪙','📈']
-  const types=[{l:'现金',v:'cash'},{l:'储蓄卡',v:'savings'},{l:'信用卡',v:'credit'},{l:'电子钱包',v:'ewallet'}]
-  showModal(`<div class="modal-t">${id?'编辑账户':'添加账户'}</div>
-  <div class="row"><span class="row-label">名称</span><input class="row-input row-val" id="acc-name" value="${a.name}" placeholder="账户名称"></div>
-  <div class="row"><span class="row-label">类型</span><select class="row-input row-val" id="acc-type">${types.map(t=>`<option value="${t.v}" ${a.type===t.v?'selected':''}>${t.l}</option>`).join('')}</select></div>
-  <div class="row"><span class="row-label">图标</span><div style="display:flex;flex-wrap:wrap;gap:8px">${icons.map(ic=>`<div onclick="document.getElementById('acc-ic').value='${ic}'" style="cursor:pointer;font-size:24px;padding:4px 8px;border-radius:8px;${a.icon===ic?'background:var(--blue-light)':''}">${ic}</div>`).join('')}</div><input type="hidden" id="acc-ic" value="${a.icon}"></div>
-  <div class="row"><span class="row-label">初始余额</span><input class="row-input row-val" type="number" id="acc-init" value="${a.initialBalance}" placeholder="0.00"></div>
-  <div class="row"><span class="row-label">当前余额</span><input class="row-input row-val" type="number" id="acc-cur" value="${a.currentBalance}" placeholder="0.00"></div>
-  <div style="font-size:12px;color:var(--muted);padding:8px 0">信用卡余额可为负数（表示欠款）。"当前余额"用于对账——与系统算出的应有余额对比。</div>
-  <button class="btn" style="margin-top:12px" onclick="saveAcc('${id}')">保存</button>
-  <div class="row" style="cursor:pointer" onclick="hideModal()"><span style="color:var(--muted);text-align:center;width:100%">取消</span></div>`)
-}
-function saveAcc(id){
-  const name=document.getElementById('acc-name').value
-  if(!name)return toast('请输入账户名称')
-  const data={name,type:document.getElementById('acc-type').value,icon:document.getElementById('acc-ic').value,initialBalance:Number(document.getElementById('acc-init').value||0),currentBalance:Number(document.getElementById('acc-cur').value||0)}
-  if(id){Object.assign(db.accounts.find(a=>a._id===id),data)}else{db.accounts.push({_id:'a_'+Date.now(),...data,sortOrder:db.accounts.length+1})}
-  save();hideModal();render();toast('已保存')
-}
-async function delAcc(id){
-  const cnt=db.transactions.filter(t=>t.accountId===id||t.toAccountId===id).length
-  if(cnt>0)return toast('该账户下有交易记录\n请先处理相关交易')
-  if(!confirm('确认删除？'))return
-  db.accounts=db.accounts.filter(a=>a._id!==id);save();render();toast('已删除')
-}
-
-// --- 对账Tab ---
-function renderRec(){
-  const results=reconcile()
-  const matched=results.filter(r=>r.isMatch).length
-  const mismatched=results.length-matched
-  const cards=results.map(r=>{
-    const sign=r.expectedBalance<0?'-':''
-    return`<div class="rec"><div class="rec-l ${r.isMatch?'ok':'warn'}"></div><div class="rec-c">
-      <div class="rec-h"><span style="font-size:20px">${r.icon}</span><span class="rec-n">${r.name}</span><span class="rec-badge ${r.isMatch?'ok':'warn'}">${r.isMatch?'✓ 对得上':'✗ 对不上'}</span></div>
-      <div class="rec-row"><span class="rec-lbl">交易笔数</span><span class="rec-val">${r.txnCount} 笔</span></div>
-      <div class="rec-row"><span class="rec-lbl">收入</span><span class="rec-val" style="color:var(--green)">+¥${money(r.income)}</span></div>
-      <div class="rec-row"><span class="rec-lbl">支出</span><span class="rec-val" style="color:var(--red)">-¥${money(r.expense)}</span></div>
-      <div class="rec-row"><span class="rec-lbl">应有余额</span><span class="rec-val">${sign}¥${money(Math.abs(r.expectedBalance))}</span></div>
-      <div class="rec-row"><span class="rec-lbl">实际余额</span><span class="rec-val">¥${money(r.actualBalance)}</span></div>
-      <div class="rec-row"><span class="rec-lbl">差额</span><span class="rec-val ${r.isMatch?'':'warn'}">${r.diff>0?'+':''}¥${money(r.diff)}</span></div>
-      ${r.isMatch?'':`<div style="margin-top:10px;padding:8px 12px;background:#fef2f2;border-radius:8px;font-size:12px;color:#dc2626">⚠ 差额 ¥${money(Math.abs(r.diff))}，可能漏记或错记</div><button class="btn btn-sm btn-out" style="margin-top:8px;color:var(--blue)" onclick="updateActual('${r._id}',${r.expectedBalance})">以应有余额更新实际值</button>`}
-    </div></div>`
-  }).join('')
-  return`<div class="card"><div style="font-size:15px;font-weight:600;margin-bottom:6px">余额对账</div><div style="font-size:12px;color:var(--muted);line-height:1.6">对比每个账户的"应有余额"（系统按交易算出）vs"实际余额"（你填的），差额≠0说明有漏记或错记。<br>信用卡：消费增加欠款（余额变负），还款转账减少欠款。</div></div>
-  <div class="summary"><div class="sum-item"><div class="sum-lbl">对得上</div><div class="sum-val" style="color:var(--green)">${matched}</div></div><div class="sum-item"><div class="sum-lbl">对不上</div><div class="sum-val" style="color:var(--red)">${mismatched}</div></div></div>
-  ${cards||'<div class="empty">暂无账户</div>'}
-  <button class="btn btn-out" style="color:var(--blue)" onclick="render()">刷新对账</button>`
-}
-function updateActual(id,expected){
-  if(!confirm(`将实际余额设为 ¥${money(expected)}？\n\n建议先检查该账户流水确认没有漏记再更新。`))return
-  db.accounts.find(a=>a._id===id).currentBalance=expected;save();render();toast('已更新')
-}
-
-// --- 导入Tab ---
+// --- 导入Tab（含账户管理入口） ---
 let impState={format:'bank',accountId:'',fileName:'',records:null,result:null}
 function renderImp(){
   const acc=db.accounts.find(a=>a._id===impState.accountId)
@@ -451,7 +443,7 @@ function renderImp(){
   let resHTML=''
   if(impState.result){const r=impState.result;resHTML=`<div class="card" style="border-left:4px solid var(--blue)"><div style="font-weight:600;margin-bottom:8px">导入结果</div><div class="rec-row"><span class="rec-lbl">总条数</span><span>${r.total}</span></div><div class="rec-row"><span class="rec-lbl">新增</span><span style="color:var(--green)">${r.imported}</span></div><div class="rec-row"><span class="rec-lbl">去重跳过</span><span style="color:var(--orange)">${r.skipped}</span></div>${r.skippedRecords&&r.skippedRecords.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">跳过的交易：</div>${r.skippedRecords.map(s=>`<div class="rec-row"><span class="rec-lbl" style="font-size:12px">${fmtDateShort(s.timestamp)}</span><span style="font-size:12px">${s.type==='income'?'退款':'消费'} ¥${money(s.amount)} ${s.merchant||''}</span></div>`).join('')}</div>`:''}</div>`}
   return`<div class="card"><div style="font-size:16px;font-weight:600;margin-bottom:4px">导入账单</div><div style="font-size:12px;color:var(--muted);line-height:1.6">支持 CSV、Excel(.xlsx/.xls)、PDF 文件，自动去重（指纹匹配）后入库。</div></div>
-  <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:12px">① 选择导入到哪个账户</div><div style="background:var(--bg);border-radius:10px;padding:14px;cursor:pointer" onclick="showImpAccPicker()">${acc?acc.icon+' '+acc.name:'请选择 ▾'}<span style="float:right">▾</span></div></div>
+  <div class="card"><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:14px;font-weight:500">① 选择账户</div><span style="font-size:12px;color:var(--blue);cursor:pointer" onclick="manageAccounts()">管理账户</span></div><div style="background:var(--bg);border-radius:10px;padding:14px;margin-top:10px;cursor:pointer" onclick="showImpAccPicker()">${acc?acc.icon+' '+acc.name:'请选择 ▾'}<span style="float:right">▾</span></div></div>
   <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:12px">② 选择账单格式</div>${fmtHTML}</div>
   <div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:12px">③ 选择文件</div><div class="upload" onclick="document.getElementById('fileInput').click()">${impState.fileName||'点击选择文件（CSV / Excel / PDF）'}</div><input type="file" id="fileInput" accept=".csv,.txt,.xls,.xlsx,.pdf" style="display:none" onchange="handleFile(this)"></div>
   ${prevHTML}${resHTML}`
@@ -459,6 +451,38 @@ function renderImp(){
 function showImpAccPicker(){
   const items=db.accounts.map(a=>`<div class="row" style="cursor:pointer" onclick="impState.accountId='${a._id}';hideModal();render()"><span style="font-size:20px">${a.icon}</span><span style="margin-left:10px">${a.name}</span></div>`).join('')
   showModal(`<div class="modal-t">选择账户</div>${items}`)
+}
+// 账户管理弹窗
+function manageAccounts(){
+  const items=db.accounts.map(a=>{const bal=Number(a.currentBalance);return`<div class="row" style="cursor:pointer" onclick="hideModal();editAcc('${a._id}')"><span style="font-size:20px">${a.icon}</span><span style="flex:1;margin-left:10px">${a.name}</span><span style="font-weight:600;color:${bal<0?'var(--red)':'var(--text)'}">${bal<0?'-':''}¥${money(Math.abs(bal))}</span></div>`}).join('')
+  showModal(`<div class="modal-t">账户管理</div>${items}<button class="btn btn-out" style="color:var(--blue);margin-top:8px" onclick="hideModal();editAcc('')">+ 添加账户</button><div class="row" style="cursor:pointer" onclick="hideModal()"><span style="color:var(--muted)">关闭</span></div>`)
+}
+function editAcc(id){
+  const a=id?db.accounts.find(x=>x._id===id):{name:'',type:'savings',icon:'💰',initialBalance:'',currentBalance:''}
+  const icons=['💰','🏦','💳','💵','💚','💙','🪙','📈']
+  const types=[{l:'现金',v:'cash'},{l:'储蓄卡',v:'savings'},{l:'信用卡',v:'credit'},{l:'电子钱包',v:'ewallet'}]
+  showModal(`<div class="modal-t">${id?'编辑账户':'添加账户'}</div>
+  <div class="row"><span class="row-label">名称</span><input class="row-input row-val" id="acc-name" value="${a.name}" placeholder="账户名称"></div>
+  <div class="row"><span class="row-label">类型</span><select class="row-input row-val" id="acc-type">${types.map(t=>`<option value="${t.v}" ${a.type===t.v?'selected':''}>${t.l}</option>`).join('')}</select></div>
+  <div class="row"><span class="row-label">图标</span><div style="display:flex;flex-wrap:wrap;gap:8px">${icons.map(ic=>`<div onclick="document.getElementById('acc-ic').value='${ic}'" style="cursor:pointer;font-size:24px;padding:4px 8px;border-radius:8px;${a.icon===ic?'background:var(--blue-light)':''}">${ic}</div>`).join('')}</div><input type="hidden" id="acc-ic" value="${a.icon}"></div>
+  <div class="row"><span class="row-label">初始余额</span><input class="row-input row-val" type="number" id="acc-init" value="${a.initialBalance}" placeholder="0.00"></div>
+  <div class="row"><span class="row-label">当前余额</span><input class="row-input row-val" type="number" id="acc-cur" value="${a.currentBalance}" placeholder="0.00"></div>
+  <button class="btn" style="margin-top:12px" onclick="saveAcc('${id}')">保存</button>
+  ${id?`<div class="row" style="cursor:pointer" onclick="delAcc('${id}')"><span style="color:var(--red)">删除账户</span></div>`:''}
+  <div class="row" style="cursor:pointer" onclick="hideModal()"><span style="color:var(--muted)">取消</span></div>`)
+}
+function saveAcc(id){
+  const name=document.getElementById('acc-name').value
+  if(!name)return toast('请输入账户名称')
+  const data={name,type:document.getElementById('acc-type').value,icon:document.getElementById('acc-ic').value,initialBalance:Number(document.getElementById('acc-init').value||0),currentBalance:Number(document.getElementById('acc-cur').value||0)}
+  if(id){Object.assign(db.accounts.find(a=>a._id===id),data)}else{db.accounts.push({_id:'a_'+Date.now(),...data,sortOrder:db.accounts.length+1})}
+  save();hideModal();render();toast('已保存')
+}
+async function delAcc(id){
+  const cnt=db.transactions.filter(t=>t.accountId===id||t.toAccountId===id).length
+  if(cnt>0)return toast('该账户下有交易记录\n请先处理相关交易')
+  if(!confirm('确认删除？'))return
+  db.accounts=db.accounts.filter(a=>a._id!==id);save();hideModal();render();toast('已删除')
 }
 
 // ===== 文件处理 =====
