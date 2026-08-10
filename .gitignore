@@ -1,6 +1,5 @@
 # 依赖
 node_modules/
-package-lock.json
 
 # 系统
 .DS_Store
@@ -9,12 +8,5 @@ Thumbs.db
 # 日志
 *.log
 
-# 用户数据（不要上传个人账单）
+# 用户数据
 upload/
-
-# 开发工具
-.vscode/
-.idea/
-
-# 微信开发者工具本地配置（含个人 AppID）
-project.private.config.json

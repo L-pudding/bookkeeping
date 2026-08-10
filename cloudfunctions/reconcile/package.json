@@ -1,9 +1,0 @@
-{
-  "name": "reconcile",
-  "version": "1.0.0",
-  "description": "对账（应有余额 vs 实际余额）",
-  "main": "index.js",
-  "dependencies": {
-    "wx-server-sdk": "~2.6.3"
-  }
-}

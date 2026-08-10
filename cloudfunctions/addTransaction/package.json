@@ -1,9 +1,0 @@
-{
-  "name": "addTransaction",
-  "version": "1.0.0",
-  "description": "添加交易（含指纹去重）",
-  "main": "index.js",
-  "dependencies": {
-    "wx-server-sdk": "~2.6.3"
-  }
-}

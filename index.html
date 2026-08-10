@@ -86,8 +86,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei
 .cat-grid{display:flex;flex-wrap:wrap;gap:8px}
 .cat{width:23%;text-align:center;padding:10px 0;border-radius:10px;cursor:pointer;border:2px solid transparent}
 .cat.active{border-color:var(--blue);background:var(--blue-light)}
+.cat-pick{width:23%;text-align:center;padding:10px 0;border-radius:10px;cursor:pointer;border:2px solid transparent}
+.cat-pick.active{border-color:var(--blue);background:var(--blue-light)}
 .cat-ic{font-size:24px}.cat-n{font-size:11px;color:var(--muted);margin-top:2px}
 .cat.active .cat-n{color:var(--blue)}
+.cat-tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--blue-light);color:var(--blue);cursor:pointer;margin-right:6px}
+.cat-tag.unassigned{background:#fef3c7;color:#92400e;border:1px dashed #d97706}
 @media(max-width:480px){.app{box-shadow:none}.modal{border-radius:0}}
 </style>
 </head>
@@ -322,17 +326,46 @@ function renderList(){
   txns=txns.sort((a,b)=>b.timestamp-a.timestamp)
   let exp=0,inc=0
   txns.forEach(t=>{if(t.type==='expense')exp+=t.amount;else if(t.type==='income')inc+=t.amount})
-  const accOpts=['全部账户',...db.accounts.map(a=>a.icon+' '+a.name)]
-  const accIdx=listFilter.accountId?accOpts.findIndex((_,i)=>i>0&&db.accounts[i-1]._id===listFilter.accountId):0
   const items=txns.length?txns.map(t=>{
     const acc=db.accounts.find(a=>a._id===t.accountId)
-    const cat=db.categories.find(c=>c._id===t.categoryId)||{}
-    const pill=t.type==='expense'?'<span class="pill pill-exp">支出</span>':t.type==='income'?'<span class="pill pill-inc">收入</span>':''
-    return`<div class="tx-item"><div class="tx-ic ${t.type==='expense'?'exp':'inc'}">${cat.icon||(t.type==='expense'?'💰':'💵')}</div><div class="tx-info"><div class="tx-mer">${t.merchant||t.note||cat.name||'未分类'}</div><div class="tx-sub">${acc?acc.name:''} · ${fmtDateShort(t.timestamp)} ${pill}</div></div><div class="tx-amt ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'-':'+'}¥${money(t.amount)}</div></div>`
+    const cat=db.categories.find(c=>c._id===t.categoryId)
+    const pill=t.type==='expense'?'<span class="pill pill-exp">支出</span>':'<span class="pill pill-inc">收入</span>'
+    const catLabel=cat?`<span class="cat-tag" onclick="event.stopPropagation();showTxCatPicker('${t._id}')">${cat.icon} ${cat.name}</span>`:`<span class="cat-tag unassigned" onclick="event.stopPropagation();showTxCatPicker('${t._id}')">+分类</span>`
+    return`<div class="tx-item" onclick="showTxDetail('${t._id}')"><div class="tx-ic ${t.type==='expense'?'exp':'inc'}">${cat?cat.icon:(t.type==='expense'?'💰':'💵')}</div><div class="tx-info"><div class="tx-mer">${t.merchant||t.note||(cat?cat.name:'未分类')}</div><div class="tx-sub">${catLabel} ${acc?acc.name:''} · ${fmtDateShort(t.timestamp)} ${pill}</div></div><div class="tx-amt ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'-':'+'}¥${money(t.amount)}</div></div>`
   }).join(''):'<div class="empty">暂无交易记录</div>'
   return`<div class="summary"><div class="sum-item"><div class="sum-lbl">支出</div><div class="sum-val sum-exp">¥${money(exp)}</div></div><div class="sum-item"><div class="sum-lbl">收入</div><div class="sum-val sum-inc">¥${money(inc)}</div></div><div class="sum-item"><div class="sum-lbl">结余</div><div class="sum-val sum-bal">¥${money(inc-exp)}</div></div></div>
   <select class="input" style="margin-bottom:12px" onchange="listFilter.accountId=this.value;render()"><option value="">全部账户</option>${db.accounts.map(a=>`<option value="${a._id}" ${listFilter.accountId===a._id?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select>
   <div class="card">${items}</div>`
+}
+// 给交易选分类
+function showTxCatPicker(txId){
+  const tx=db.transactions.find(t=>t._id===txId)
+  if(!tx)return
+  const cats=db.categories.filter(c=>c.type===tx.type||c.type===(tx.type==='expense'?'expense':'income'))
+  const grid=cats.map(c=>`<div class="cat-pick ${tx.categoryId===c._id?'active':''}" onclick="setTxCat('${txId}','${c._id}')"><div class="cat-ic">${c.icon}</div><div class="cat-n">${c.name}</div></div>`).join('')
+  showModal(`<div class="modal-t">选择分类</div><div class="cat-grid">${grid}</div><div class="cat-grid"><div class="cat-pick" onclick="setTxCat('${txId}','')"><div class="cat-ic">❌</div><div class="cat-n">清除</div></div></div><div class="row" style="cursor:pointer" onclick="hideModal()"><span style="color:var(--muted)">取消</span></div>`)
+}
+function setTxCat(txId,catId){
+  const t=db.transactions.find(t=>t._id===txId)
+  if(t){t.categoryId=catId;save()}
+  hideModal();render()
+}
+// 交易详情弹窗
+function showTxDetail(txId){
+  const t=db.transactions.find(t=>t._id===txId)
+  if(!t)return
+  const acc=db.accounts.find(a=>a._id===t.accountId)
+  const cat=db.categories.find(c=>c._id===t.categoryId)
+  const srcLabel={manual:'手动',wechat_bill:'微信账单',alipay_bill:'支付宝账单',bank_bill:'银行流水',cmb_pdf_bill:'招行PDF'}[t.source]||t.source
+  showModal(`<div class="modal-t">交易详情</div>
+  <div class="row"><span class="row-label">金额</span><span class="row-val" style="color:${t.type==='expense'?'var(--red)':'var(--green)'};font-weight:600">${t.type==='expense'?'-':'+'}¥${money(t.amount)}</span></div>
+  <div class="row"><span class="row-label">分类</span><span class="row-val" style="cursor:pointer;color:var(--blue)" onclick="hideModal();showTxCatPicker('${t._id}')">${cat?cat.icon+' '+cat.name:'点此选择 ▾'}</span></div>
+  <div class="row"><span class="row-label">商户</span><span class="row-val">${t.merchant||'-'}</span></div>
+  <div class="row"><span class="row-label">账户</span><span class="row-val">${acc?acc.icon+' '+acc.name:'-'}</span></div>
+  <div class="row"><span class="row-label">时间</span><span class="row-val">${fmtDate(t.timestamp)}</span></div>
+  <div class="row"><span class="row-label">来源</span><span class="row-val">${srcLabel}</span></div>
+  ${t.note?`<div class="row"><span class="row-label">备注</span><span class="row-val">${t.note}</span></div>`:''}
+  <div class="row" style="cursor:pointer" onclick="hideModal()"><span style="color:var(--muted)">关闭</span></div>`)
 }
 
 // --- 账户Tab ---
